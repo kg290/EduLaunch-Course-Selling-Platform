@@ -1,15 +1,24 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 const CourseCard = ({ course, layout = "grid" }) => {
   const isHorizontal = layout === "horizontal";
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
+  const hasThumbnail = Boolean(course.thumbnailUrl) && !imageLoadFailed;
 
   return (
     <article className={`card course-card ${isHorizontal ? "horizontal" : ""}`}>
-      {course.thumbnailUrl ? (
-        <img src={course.thumbnailUrl} alt={course.title} className="course-thumb" />
+      {hasThumbnail ? (
+        <img
+          src={course.thumbnailUrl}
+          alt={course.title}
+          className="course-thumb"
+          loading="lazy"
+          onError={() => setImageLoadFailed(true)}
+        />
       ) : (
         <div className="course-thumb placeholder">
-          <span>📚</span>
+          <span className="thumb-fallback-text">Course Thumbnail</span>
         </div>
       )}
       <div className="card-content">

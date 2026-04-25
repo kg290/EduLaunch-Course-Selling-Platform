@@ -496,9 +496,16 @@ select option {
 .course-thumb.placeholder {
   display: grid;
   place-items: center;
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  background:
+    linear-gradient(135deg, #f5f5f5 0%, #ececec 50%, #f7f7f7 100%);
+}
+
+.thumb-fallback-text {
+  font-size: 0.82rem;
   font-weight: 600;
-  font-size: 1.5rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .card-content {

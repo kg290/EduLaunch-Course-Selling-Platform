@@ -4,8 +4,16 @@ const Enrollment = require("../models/Enrollment");
 const User = require("../models/User");
 const asyncHandler = require("../middlewares/asyncHandler");
 const { createMockIntent, simulatePayment } = require("../utils/mockPayment");
-const { getRazorpay, isRazorpayConfigured } = require("../utils/razorpay");
+const {
+  isRazorpayConfigured,
+  createRazorpayOrderRequest
+} = require("../utils/razorpay");
 const { sendEnrollmentEmail } = require("../utils/mailer");
+
+const createRazorpayReceipt = (courseId) => {
+  // Razorpay receipt max length is 40 chars.
+  return `crs_${String(courseId).slice(-8)}_${Date.now().toString(36)}`;
+};
 
 const createMockPaymentIntent = asyncHandler(async (req, res) => {
   const { courseId } = req.body;
@@ -154,11 +162,10 @@ const createRazorpayOrder = asyncHandler(async (req, res) => {
     throw new Error("Already enrolled in this course");
   }
 
-  const razorpay = getRazorpay();
-  const order = await razorpay.orders.create({
+  const order = await createRazorpayOrderRequest({
     amount: Math.round(course.price * 100), // Razorpay uses paise
     currency: "INR",
-    receipt: `course_${course._id}_${Date.now()}`,
+    receipt: createRazorpayReceipt(course._id),
     notes: {
       courseId: course._id.toString(),
       studentId: req.user._id.toString()
