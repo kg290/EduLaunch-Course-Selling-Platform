@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const certificateSchema = require("./Certificate");
 
 const enrollmentSchema = new mongoose.Schema(
   {
@@ -45,17 +46,30 @@ const enrollmentSchema = new mongoose.Schema(
         type: [Number],
         default: []
       },
+      bookmarkedChapterIndexes: {
+        type: [Number],
+        default: []
+      },
       completedPercent: {
         type: Number,
         default: 0
       },
-      lastWatchedAt: Date
+      lastWatchedAt: Date,
+      lastChapterIndex: {
+        type: Number,
+        default: 0
+      }
+    },
+    certificate: {
+      type: certificateSchema,
+      default: null
     },
     status: {
       type: String,
       enum: ["active", "completed"],
       default: "active"
-    }
+    },
+    completedAt: Date
   },
   { timestamps: true }
 );

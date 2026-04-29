@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
-import api from "../api/client";
+import api, { toAssetUrl } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import ReviewSection from "../components/ReviewSection";
 
@@ -35,6 +35,8 @@ const CourseDetailsPage = () => {
   const [status, setStatus] = useState("loading");
   const [selectedChapter, setSelectedChapter] = useState(0);
   const [paying, setPaying] = useState(false);
+  const [wishlistBusy, setWishlistBusy] = useState(false);
+  const [bookmarkBusy, setBookmarkBusy] = useState(false);
 
   const isStudent = user?.role === "student";
   const isAdmin = user?.role === "admin";
@@ -128,6 +130,16 @@ const CourseDetailsPage = () => {
     loadEnrollment();
   }, [id, isAuthenticated, isStudent]);
 
+  useEffect(() => {
+    if (enrollment?.progress?.lastChapterIndex !== undefined) {
+      const safeIndex = Math.max(
+        0,
+        Math.min(Number(enrollment.progress.lastChapterIndex) || 0, chapterCount - 1)
+      );
+      setSelectedChapter(safeIndex);
+    }
+  }, [enrollment?._id, enrollment?.progress?.lastChapterIndex, chapterCount]);
+
   const selectedChapterData = useMemo(() => {
     if (!chaptersForView.length) return null;
     return chaptersForView[selectedChapter] || chaptersForView[0];
@@ -138,6 +150,9 @@ const CourseDetailsPage = () => {
   );
 
   const completedIndexes = enrollment?.progress?.completedChapterIndexes || [];
+  const bookmarkedIndexes = enrollment?.progress?.bookmarkedChapterIndexes || [];
+  const isBookmarked = bookmarkedIndexes.includes(selectedChapter);
+  const hasCertificate = Boolean(enrollment?.certificate?.certificateId);
 
   // Razorpay real payment flow
   const startRazorpayPayment = async () => {
@@ -213,7 +228,7 @@ const CourseDetailsPage = () => {
     }
   };
 
-  const toggleChapterCompletion = async (chapterIndex, checked) => {
+  const toggleChapterCompletion = async (chapterIndex, checked, options = {}) => {
     try {
       const response = await api.patch(`/enrollments/course/${id}/progress`, {
         chapterIndex,
@@ -224,9 +239,68 @@ const CourseDetailsPage = () => {
         progress: response.data.progress,
         status: response.data.status
       }));
+
+      if (options.advanceToNext && checked) {
+        if (chapterIndex < chaptersForView.length - 1) {
+          setSelectedChapter(chapterIndex + 1);
+        }
+      }
     } catch (apiError) {
       setError(apiError.response?.data?.message || "Could not update progress");
     }
+  };
+
+  const toggleBookmark = async () => {
+    if (!enrollment) {
+      return;
+    }
+
+    setBookmarkBusy(true);
+    setError("");
+    try {
+      const nextBookmarked = !isBookmarked;
+      const response = await api.patch(`/enrollments/course/${id}/bookmarks`, {
+        chapterIndex: selectedChapter,
+        bookmarked: nextBookmarked
+      });
+
+      setEnrollment((prev) => ({
+        ...prev,
+        progress: {
+          ...prev.progress,
+          bookmarkedChapterIndexes: response.data.bookmarks
+        }
+      }));
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Could not update bookmark");
+    } finally {
+      setBookmarkBusy(false);
+    }
+  };
+
+  const toggleWishlist = async () => {
+    setWishlistBusy(true);
+    setError("");
+    try {
+      if (course.isWishlisted) {
+        await api.delete(`/courses/${id}/wishlist`);
+      } else {
+        await api.post(`/courses/${id}/wishlist`);
+      }
+
+      setCourse((prev) => ({ ...prev, isWishlisted: !prev.isWishlisted }));
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Could not update wishlist");
+    } finally {
+      setWishlistBusy(false);
+    }
+  };
+
+  const onLocalVideoEnded = async () => {
+    if (!enrollment || completedIndexes.includes(selectedChapter)) {
+      return;
+    }
+    await toggleChapterCompletion(selectedChapter, true, { advanceToNext: true });
   };
 
   if (status === "loading") {
@@ -254,14 +328,23 @@ const CourseDetailsPage = () => {
             <p className="muted" style={{ marginTop: "0.3rem" }}>
               By <strong style={{ color: "var(--text-primary)" }}>{course.educator?.name}</strong>
             </p>
+            {isStudent && (
+              <button
+                className={`btn btn-sm ${course.isWishlisted ? "btn-primary" : "btn-ghost"}`}
+                type="button"
+                onClick={toggleWishlist}
+                disabled={wishlistBusy}
+                style={{ marginTop: "0.8rem" }}
+              >
+                {course.isWishlisted ? "Saved to Wishlist" : "Save for Later"}
+              </button>
+            )}
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{
               fontSize: "2.2rem",
               fontWeight: 800,
-              background: "var(--accent-gradient-bold)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent"
+              color: "var(--accent-dark)"
             }}>
               ₹{Number(course.price).toFixed(0)}
             </div>
@@ -358,9 +441,12 @@ const CourseDetailsPage = () => {
             />
           </div>
           {enrollment.status === "completed" && (
-            <p className="success" style={{ marginTop: "0.8rem" }}>
-              🎉 Congratulations! You've completed this course.
-            </p>
+            <div style={{ marginTop: "0.8rem" }}>
+              <p className="success">🎉 Congratulations! You've completed this course.</p>
+              <Link className="btn btn-primary" to={`/certificates/${id}`} style={{ marginTop: "0.7rem" }}>
+                {hasCertificate ? "View Certificate" : "Generate Certificate"}
+              </Link>
+            </div>
           )}
         </div>
       )}
@@ -434,14 +520,38 @@ const CourseDetailsPage = () => {
             <>
               <div className="row-between wrap" style={{ marginBottom: "0.3rem" }}>
                 <h3>{selectedChapterData.title}</h3>
-                {!canAccessCourseContent && selectedChapterData.isPreview && (
-                  <span className="label">Preview Lesson</span>
-                )}
+                <div className="row-gap">
+                  {enrollment && (
+                    <button
+                      className={`btn btn-sm ${isBookmarked ? "btn-primary" : "btn-ghost"}`}
+                      type="button"
+                      onClick={toggleBookmark}
+                      disabled={bookmarkBusy}
+                    >
+                      {isBookmarked ? "Bookmarked" : "Bookmark"}
+                    </button>
+                  )}
+                  {!canAccessCourseContent && selectedChapterData.isPreview && (
+                    <span className="label">Preview Lesson</span>
+                  )}
+                </div>
               </div>
               <p className="muted" style={{ marginBottom: "0.5rem" }}>
                 {selectedChapterData.summary || "No summary provided."}
               </p>
-              {selectedChapterData.youtubeUrl ? (
+              {selectedChapterData.videoPath ? (
+                <div className="video-wrap">
+                  <video
+                    key={`${selectedChapter}-${selectedChapterData.videoPath}`}
+                    controls
+                    preload="metadata"
+                    onEnded={onLocalVideoEnded}
+                  >
+                    <source src={toAssetUrl(selectedChapterData.videoPath)} />
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              ) : selectedChapterData.youtubeUrl ? (
                 <div className="video-wrap">
                   <iframe
                     src={extractEmbedUrl(selectedChapterData.youtubeUrl)}
@@ -454,6 +564,12 @@ const CourseDetailsPage = () => {
                 <div className="empty-state" style={{ padding: "1.5rem" }}>
                   <p>Video is not available for this chapter preview.</p>
                 </div>
+              )}
+
+              {selectedChapterData.videoPath && enrollment && (
+                <p className="muted" style={{ marginTop: "0.7rem", fontSize: "0.85rem" }}>
+                  This local uploaded lesson auto-marks as complete and advances to the next chapter when the video ends.
+                </p>
               )}
 
               {!canAccessCourseContent && (

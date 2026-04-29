@@ -5,6 +5,7 @@ dist/
 build/
 .env
 server/.env
+server/uploads/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

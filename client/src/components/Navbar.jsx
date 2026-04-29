@@ -19,7 +19,11 @@ const Navbar = () => {
       <nav className="nav-links">
         <NavLink to="/courses">Courses</NavLink>
         {isAuthenticated && user?.role === "student" && (
-          <NavLink to="/my-learning">My Learning</NavLink>
+          <>
+            <NavLink to="/my-learning">My Learning</NavLink>
+            <NavLink to="/wishlist">Wishlist</NavLink>
+            <NavLink to="/profile">Profile</NavLink>
+          </>
         )}
         {isAuthenticated && user?.role === "educator" && (
           <NavLink to="/educator">Dashboard</NavLink>

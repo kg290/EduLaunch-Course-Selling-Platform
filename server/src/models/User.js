@@ -24,6 +24,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["educator", "student", "admin"],
       default: "student"
+    },
+    wishlist: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Course"
+        }
+      ],
+      default: []
     }
   },
   { timestamps: true }

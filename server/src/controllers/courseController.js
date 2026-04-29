@@ -1,6 +1,8 @@
 const Course = require("../models/Course");
 const Enrollment = require("../models/Enrollment");
+const User = require("../models/User");
 const asyncHandler = require("../middlewares/asyncHandler");
+const { buildUploadVideoPath } = require("../config/media");
 const { isYouTubeUrl } = require("../utils/youtube");
 
 const normalizeChapters = (chapters) => {
@@ -13,16 +15,18 @@ const normalizeChapters = (chapters) => {
   return chapters.map((chapter, index) => {
     const title = String(chapter?.title || "").trim();
     const youtubeUrl = String(chapter?.youtubeUrl || "").trim();
+    const videoPath = String(chapter?.videoPath || "").trim();
+    const originalVideoName = String(chapter?.originalVideoName || "").trim();
 
-    if (!title || !youtubeUrl) {
+    if (!title || (!youtubeUrl && !videoPath)) {
       const error = new Error(
-        `Chapter ${index + 1} must include title and YouTube URL`
+        `Chapter ${index + 1} must include title and at least one video source`
       );
       error.statusCode = 400;
       throw error;
     }
 
-    if (!isYouTubeUrl(youtubeUrl)) {
+    if (youtubeUrl && !isYouTubeUrl(youtubeUrl)) {
       const error = new Error(`Chapter ${index + 1} has an invalid YouTube URL`);
       error.statusCode = 400;
       throw error;
@@ -31,9 +35,25 @@ const normalizeChapters = (chapters) => {
     return {
       title,
       youtubeUrl,
+      videoPath,
+      originalVideoName,
       summary: String(chapter?.summary || "").trim()
     };
   });
+};
+
+const appendWishlistState = (courseObject, wishlistedIds) => ({
+  ...courseObject,
+  isWishlisted: wishlistedIds.has(String(courseObject._id))
+});
+
+const getWishlistedIds = async (user) => {
+  if (!user || user.role !== "student") {
+    return new Set();
+  }
+
+  const freshUser = await User.findById(user._id).select("wishlist");
+  return new Set((freshUser?.wishlist || []).map((item) => String(item)));
 };
 
 const mapCourseWithAccess = async (course, user) => {
@@ -79,6 +99,7 @@ const mapCourseWithAccess = async (course, user) => {
     return {
       ...chapter,
       youtubeUrl: "",
+      videoPath: "",
       isLocked: true,
       isPreview: false
     };
@@ -135,6 +156,23 @@ const createCourse = asyncHandler(async (req, res) => {
   });
 });
 
+const uploadCourseVideo = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    res.status(400);
+    throw new Error("A video file is required");
+  }
+
+  res.status(201).json({
+    message: "Video uploaded successfully",
+    asset: {
+      videoPath: buildUploadVideoPath(req.file.filename),
+      originalVideoName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size
+    }
+  });
+});
+
 const listCourses = asyncHandler(async (req, res) => {
   const search = String(req.query.search || "").trim();
   const filter = search
@@ -148,11 +186,16 @@ const listCourses = asyncHandler(async (req, res) => {
     : {};
 
   const courses = await Course.find(filter)
-    .select("-chapters.youtubeUrl")
+    .select("-chapters.youtubeUrl -chapters.videoPath")
     .populate("educator", "name")
     .sort({ createdAt: -1 });
 
-  res.json({ courses });
+  const wishlistedIds = await getWishlistedIds(req.user);
+  const mappedCourses = courses.map((course) =>
+    appendWishlistState(course.toObject(), wishlistedIds)
+  );
+
+  res.json({ courses: mappedCourses });
 });
 
 const getCourseById = asyncHandler(async (req, res) => {
@@ -164,8 +207,11 @@ const getCourseById = asyncHandler(async (req, res) => {
   }
 
   const courseWithAccess = await mapCourseWithAccess(course, req.user);
+  const wishlistedIds = await getWishlistedIds(req.user);
 
-  res.json({ course: courseWithAccess });
+  res.json({
+    course: appendWishlistState(courseWithAccess, wishlistedIds)
+  });
 });
 
 const getMyCourses = asyncHandler(async (req, res) => {
@@ -228,10 +274,51 @@ const updateCourse = asyncHandler(async (req, res) => {
   });
 });
 
+const getWishlist = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).populate({
+    path: "wishlist",
+    select: "-chapters.youtubeUrl -chapters.videoPath",
+    populate: { path: "educator", select: "name" }
+  });
+
+  const courses = (user?.wishlist || []).map((course) => ({
+    ...course.toObject(),
+    isWishlisted: true
+  }));
+
+  res.json({ courses });
+});
+
+const addToWishlist = asyncHandler(async (req, res) => {
+  const course = await Course.findById(req.params.id).select("_id");
+  if (!course) {
+    res.status(404);
+    throw new Error("Course not found");
+  }
+
+  await User.findByIdAndUpdate(req.user._id, {
+    $addToSet: { wishlist: course._id }
+  });
+
+  res.json({ message: "Course saved to wishlist" });
+});
+
+const removeFromWishlist = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(req.user._id, {
+    $pull: { wishlist: req.params.id }
+  });
+
+  res.json({ message: "Course removed from wishlist" });
+});
+
 module.exports = {
   createCourse,
+  uploadCourseVideo,
   listCourses,
   getCourseById,
   getMyCourses,
-  updateCourse
+  updateCourse,
+  getWishlist,
+  addToWishlist,
+  removeFromWishlist
 };

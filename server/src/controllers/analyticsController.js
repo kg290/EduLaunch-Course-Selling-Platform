@@ -1,5 +1,6 @@
 const Course = require("../models/Course");
 const Enrollment = require("../models/Enrollment");
+const User = require("../models/User");
 const asyncHandler = require("../middlewares/asyncHandler");
 
 const getEducatorDashboard = asyncHandler(async (req, res) => {
@@ -72,6 +73,62 @@ const getEducatorDashboard = asyncHandler(async (req, res) => {
   });
 });
 
+const getStudentDashboard = asyncHandler(async (req, res) => {
+  const [user, enrollments] = await Promise.all([
+    User.findById(req.user._id).select("wishlist"),
+    Enrollment.find({ student: req.user._id })
+      .populate({ path: "course", populate: { path: "educator", select: "name" } })
+      .populate("educator", "name")
+      .sort({ updatedAt: -1 })
+  ]);
+
+  const completedCourses = enrollments.filter(
+    (enrollment) => enrollment.status === "completed"
+  );
+  const certificates = enrollments.filter(
+    (enrollment) => enrollment.certificate?.certificateId
+  );
+  const continueLearning = enrollments.filter(
+    (enrollment) => enrollment.status !== "completed"
+  );
+  const totalLearningProgress =
+    enrollments.length === 0
+      ? 0
+      : Math.round(
+          enrollments.reduce(
+            (sum, enrollment) => sum + (enrollment.progress?.completedPercent || 0),
+            0
+          ) / enrollments.length
+        );
+  const lessonsCompleted = enrollments.reduce(
+    (sum, enrollment) =>
+      sum + (enrollment.progress?.completedChapterIndexes?.length || 0),
+    0
+  );
+
+  res.json({
+    metrics: {
+      enrolledCourses: enrollments.length,
+      completedCourses: completedCourses.length,
+      certificatesEarned: certificates.length,
+      totalLearningProgress,
+      lessonsCompleted,
+      wishlistCount: user?.wishlist?.length || 0
+    },
+    continueLearning: continueLearning.slice(0, 3),
+    certificates: certificates.map((enrollment) => ({
+      courseId: enrollment.course?._id,
+      courseTitle: enrollment.course?.title,
+      educatorName: enrollment.educator?.name || enrollment.course?.educator?.name,
+      certificateId: enrollment.certificate?.certificateId,
+      recipientName: enrollment.certificate?.recipientName,
+      issuedAt: enrollment.certificate?.issuedAt,
+      completedAt: enrollment.completedAt
+    }))
+  });
+});
+
 module.exports = {
-  getEducatorDashboard
+  getEducatorDashboard,
+  getStudentDashboard
 };

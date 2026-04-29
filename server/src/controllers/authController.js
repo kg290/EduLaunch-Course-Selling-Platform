@@ -20,7 +20,8 @@ const sanitizeUser = (user) => ({
   id: user._id,
   name: user.name,
   email: user.email,
-  role: user.role
+  role: user.role,
+  wishlistCount: Array.isArray(user.wishlist) ? user.wishlist.length : 0
 });
 
 const register = asyncHandler(async (req, res) => {

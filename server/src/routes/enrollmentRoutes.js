@@ -8,7 +8,10 @@ const {
   getPaymentConfig,
   getMyEnrollments,
   getEnrollmentForCourse,
-  updateProgress
+  updateProgress,
+  updateBookmarks,
+  issueCertificate,
+  getCertificate
 } = require("../controllers/enrollmentController");
 const { protect, requireRole } = require("../middlewares/auth");
 
@@ -31,5 +34,8 @@ router.post("/razorpay/verify", verifyRazorpayPayment);
 router.get("/mine", getMyEnrollments);
 router.get("/course/:courseId", getEnrollmentForCourse);
 router.patch("/course/:courseId/progress", updateProgress);
+router.patch("/course/:courseId/bookmarks", updateBookmarks);
+router.post("/course/:courseId/certificate", issueCertificate);
+router.get("/course/:courseId/certificate", getCertificate);
 
 module.exports = router;

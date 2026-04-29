@@ -9,7 +9,7 @@ const emptyForm = {
   category: "",
   price: "",
   thumbnailUrl: "",
-  chapters: [{ title: "", youtubeUrl: "", summary: "" }]
+  chapters: [{ title: "", youtubeUrl: "", videoPath: "", originalVideoName: "", summary: "" }]
 };
 
 const EducatorDashboardPage = () => {
@@ -21,6 +21,7 @@ const EducatorDashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [uploadingChapterIndex, setUploadingChapterIndex] = useState(-1);
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -59,7 +60,10 @@ const EducatorDashboardPage = () => {
   const addChapter = () => {
     setForm((prev) => ({
       ...prev,
-      chapters: [...prev.chapters, { title: "", youtubeUrl: "", summary: "" }]
+      chapters: [
+        ...prev.chapters,
+        { title: "", youtubeUrl: "", videoPath: "", originalVideoName: "", summary: "" }
+      ]
     }));
   };
 
@@ -88,6 +92,42 @@ const EducatorDashboardPage = () => {
       setError(apiError.response?.data?.message || "Failed to create course");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const uploadChapterVideo = async (index, file) => {
+    if (!file) {
+      return;
+    }
+
+    setError("");
+    setUploadingChapterIndex(index);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await api.post("/courses/upload-video", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
+        }
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        chapters: prev.chapters.map((chapter, chapterIndex) =>
+          chapterIndex === index
+            ? {
+                ...chapter,
+                videoPath: response.data.asset.videoPath,
+                originalVideoName: response.data.asset.originalVideoName
+              }
+            : chapter
+        )
+      }));
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Failed to upload video");
+    } finally {
+      setUploadingChapterIndex(-1);
     }
   };
 
@@ -203,6 +243,8 @@ const EducatorDashboardPage = () => {
               onChange={updateChapter}
               onAdd={addChapter}
               onRemove={removeChapter}
+              onUpload={uploadChapterVideo}
+              uploadingChapterIndex={uploadingChapterIndex}
             />
 
             {error && <p className="error">{error}</p>}

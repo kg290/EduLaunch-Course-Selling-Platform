@@ -2,15 +2,18 @@ import { useEffect, useState } from "react";
 
 import api from "../api/client";
 import CourseCard from "../components/CourseCard";
+import { useAuth } from "../context/AuthContext";
 
 const CATEGORIES = ["All", "Programming", "Design", "Marketing", "Business", "General"];
 
 const CoursesPage = () => {
+  const { isAuthenticated, user } = useAuth();
   const [courses, setCourses] = useState([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [wishlistCourseId, setWishlistCourseId] = useState("");
 
   const fetchCourses = async (searchText = "") => {
     setLoading(true);
@@ -31,6 +34,34 @@ const CoursesPage = () => {
   useEffect(() => {
     fetchCourses();
   }, []);
+
+  const toggleWishlist = async (course) => {
+    if (!isAuthenticated || user?.role !== "student") {
+      return;
+    }
+
+    setWishlistCourseId(course._id);
+    setError("");
+    try {
+      if (course.isWishlisted) {
+        await api.delete(`/courses/${course._id}/wishlist`);
+      } else {
+        await api.post(`/courses/${course._id}/wishlist`);
+      }
+
+      setCourses((prev) =>
+        prev.map((item) =>
+          item._id === course._id
+            ? { ...item, isWishlisted: !course.isWishlisted }
+            : item
+        )
+      );
+    } catch (apiError) {
+      setError(apiError.response?.data?.message || "Could not update wishlist");
+    } finally {
+      setWishlistCourseId("");
+    }
+  };
 
   const onSearch = (event) => {
     event.preventDefault();
@@ -100,7 +131,13 @@ const CoursesPage = () => {
 
       <div className="list-view">
         {filteredCourses.map((course) => (
-          <CourseCard key={course._id} course={course} layout="horizontal" />
+          <CourseCard
+            key={course._id}
+            course={course}
+            layout="horizontal"
+            onToggleWishlist={toggleWishlist}
+            wishlistLoading={wishlistCourseId === course._id}
+          />
         ))}
       </div>
     </section>

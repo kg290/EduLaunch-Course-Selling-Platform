@@ -63,6 +63,8 @@ const MyLearningPage = () => {
         {enrollments.map((enrollment) => {
           const percent = enrollment.progress?.completedPercent || 0;
           const isCompleted = enrollment.status === "completed";
+          const bookmarkCount = enrollment.progress?.bookmarkedChapterIndexes?.length || 0;
+          const nextChapterIndex = Number(enrollment.progress?.lastChapterIndex || 0) + 1;
 
           return (
             <article key={enrollment._id} className="card">
@@ -86,6 +88,10 @@ const MyLearningPage = () => {
                 <p className="muted" style={{ fontSize: "0.85rem" }}>
                   By {enrollment.educator?.name}
                 </p>
+                <p className="muted" style={{ fontSize: "0.82rem" }}>
+                  Last lesson: Chapter {Math.min(nextChapterIndex, enrollment.course.chapters?.length || nextChapterIndex)}
+                  {bookmarkCount > 0 ? ` • ${bookmarkCount} bookmark${bookmarkCount === 1 ? "" : "s"}` : ""}
+                </p>
 
                 <div style={{ marginTop: "0.8rem" }}>
                   <div className="row-between" style={{ marginBottom: "0.3rem" }}>
@@ -100,9 +106,16 @@ const MyLearningPage = () => {
                 </div>
 
                 <div className="card-footer">
-                  <Link className="btn btn-primary btn-sm" to={`/courses/${enrollment.course._id}`}>
-                    {isCompleted ? "Review Course" : "Continue Learning →"}
-                  </Link>
+                  <div className="row-gap">
+                    <Link className="btn btn-primary btn-sm" to={`/courses/${enrollment.course._id}`}>
+                      {isCompleted ? "Review Course" : "Continue Learning →"}
+                    </Link>
+                    {isCompleted && (
+                      <Link className="btn btn-ghost btn-sm" to={`/certificates/${enrollment.course._id}`}>
+                        {enrollment.certificate?.certificateId ? "View Certificate" : "Get Certificate"}
+                      </Link>
+                    )}
+                  </div>
                 </div>
               </div>
             </article>

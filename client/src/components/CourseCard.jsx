@@ -1,16 +1,26 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
-const CourseCard = ({ course, layout = "grid" }) => {
+import { toAssetUrl } from "../api/client";
+import { useAuth } from "../context/AuthContext";
+
+const CourseCard = ({
+  course,
+  layout = "grid",
+  onToggleWishlist,
+  wishlistLoading = false
+}) => {
   const isHorizontal = layout === "horizontal";
+  const { isAuthenticated, user } = useAuth();
   const [imageLoadFailed, setImageLoadFailed] = useState(false);
   const hasThumbnail = Boolean(course.thumbnailUrl) && !imageLoadFailed;
+  const canShowWishlist = isAuthenticated && user?.role === "student" && onToggleWishlist;
 
   return (
     <article className={`card course-card ${isHorizontal ? "horizontal" : ""}`}>
       {hasThumbnail ? (
         <img
-          src={course.thumbnailUrl}
+          src={toAssetUrl(course.thumbnailUrl)}
           alt={course.title}
           className="course-thumb"
           loading="lazy"
@@ -22,7 +32,23 @@ const CourseCard = ({ course, layout = "grid" }) => {
         </div>
       )}
       <div className="card-content">
-        {!isHorizontal && <span className="label" style={{alignSelf: "flex-start"}}>{course.category || "General"}</span>}
+        <div className="row-between wrap" style={{ alignItems: "flex-start" }}>
+          {!isHorizontal && (
+            <span className="label" style={{ alignSelf: "flex-start" }}>
+              {course.category || "General"}
+            </span>
+          )}
+          {canShowWishlist && (
+            <button
+              className={`btn btn-sm ${course.isWishlisted ? "btn-primary" : "btn-ghost"}`}
+              type="button"
+              onClick={() => onToggleWishlist(course)}
+              disabled={wishlistLoading}
+            >
+              {course.isWishlisted ? "Saved" : "Save"}
+            </button>
+          )}
+        </div>
         <h3 style={!isHorizontal ? { fontSize: "1.05rem", marginTop: "0.2rem" } : {}}>{course.title}</h3>
         
         {isHorizontal && (

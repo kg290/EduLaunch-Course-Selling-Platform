@@ -9,7 +9,17 @@ const chapterSchema = new mongoose.Schema(
     },
     youtubeUrl: {
       type: String,
-      required: true,
+      default: "",
+      trim: true
+    },
+    videoPath: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    originalVideoName: {
+      type: String,
+      default: "",
       trim: true
     },
     summary: {
@@ -19,6 +29,16 @@ const chapterSchema = new mongoose.Schema(
   },
   { _id: false }
 );
+
+chapterSchema.pre("validate", function validateVideoSource(next) {
+  if (!String(this.youtubeUrl || "").trim() && !String(this.videoPath || "").trim()) {
+    this.invalidate(
+      "videoPath",
+      "Each chapter must include either a local video or a YouTube fallback"
+    );
+  }
+  next();
+});
 
 const courseSchema = new mongoose.Schema(
   {

@@ -1,4 +1,11 @@
-const ChapterFormList = ({ chapters, onChange, onAdd, onRemove }) => {
+const ChapterFormList = ({
+  chapters,
+  onChange,
+  onAdd,
+  onRemove,
+  onUpload,
+  uploadingChapterIndex
+}) => {
   return (
     <div className="chapter-list">
       <div className="row-between">
@@ -23,7 +30,15 @@ const ChapterFormList = ({ chapters, onChange, onAdd, onRemove }) => {
               />
             </label>
             <label>
-              YouTube URL
+              Upload Local Video
+              <input
+                type="file"
+                accept="video/*"
+                onChange={(event) => onUpload(index, event.target.files?.[0])}
+              />
+            </label>
+            <label>
+              YouTube Fallback (optional)
               <input
                 type="url"
                 value={chapter.youtubeUrl}
@@ -31,9 +46,18 @@ const ChapterFormList = ({ chapters, onChange, onAdd, onRemove }) => {
                   onChange(index, "youtubeUrl", event.target.value)
                 }
                 placeholder="https://www.youtube.com/watch?v=..."
-                required
               />
             </label>
+          </div>
+          <div className="row-between wrap" style={{ marginTop: "0.45rem" }}>
+            <p className="muted" style={{ fontSize: "0.82rem" }}>
+              {chapter.videoPath
+                ? `Local video ready: ${chapter.originalVideoName || "Uploaded file"}`
+                : "Upload a local video first. YouTube acts as fallback if local media is unavailable."}
+            </p>
+            {uploadingChapterIndex === index && (
+              <span className="label">Uploading...</span>
+            )}
           </div>
           <label>
             Summary

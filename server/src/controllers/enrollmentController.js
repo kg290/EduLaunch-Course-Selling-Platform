@@ -15,6 +15,13 @@ const createRazorpayReceipt = (courseId) => {
   return `crs_${String(courseId).slice(-8)}_${Date.now().toString(36)}`;
 };
 
+const createCertificateId = (courseId, studentId) => {
+  const stamp = Date.now().toString(36).toUpperCase();
+  return `EDU-${String(courseId).slice(-4).toUpperCase()}-${String(studentId)
+    .slice(-4)
+    .toUpperCase()}-${stamp}`;
+};
+
 const createMockPaymentIntent = asyncHandler(async (req, res) => {
   const { courseId } = req.body;
 
@@ -338,7 +345,9 @@ const updateProgress = asyncHandler(async (req, res) => {
   enrollment.progress.completedChapterIndexes = completedChapterIndexes;
   enrollment.progress.completedPercent = completedPercent;
   enrollment.progress.lastWatchedAt = new Date();
+  enrollment.progress.lastChapterIndex = numericChapterIndex;
   enrollment.status = completedPercent === 100 ? "completed" : "active";
+  enrollment.completedAt = completedPercent === 100 ? enrollment.completedAt || new Date() : null;
 
   await enrollment.save();
 
@@ -346,6 +355,137 @@ const updateProgress = asyncHandler(async (req, res) => {
     message: "Progress updated",
     progress: enrollment.progress,
     status: enrollment.status
+  });
+});
+
+const updateBookmarks = asyncHandler(async (req, res) => {
+  const { chapterIndex, bookmarked = true } = req.body;
+
+  if (chapterIndex === undefined || Number.isNaN(Number(chapterIndex))) {
+    res.status(400);
+    throw new Error("chapterIndex must be provided");
+  }
+
+  const enrollment = await Enrollment.findOne({
+    student: req.user._id,
+    course: req.params.courseId
+  }).populate("course");
+
+  if (!enrollment) {
+    res.status(404);
+    throw new Error("Enrollment not found");
+  }
+
+  const numericChapterIndex = Number(chapterIndex);
+  const totalChapters = enrollment.course.chapters.length;
+
+  if (numericChapterIndex < 0 || numericChapterIndex >= totalChapters) {
+    res.status(400);
+    throw new Error("Invalid chapter index");
+  }
+
+  const currentBookmarks = new Set(enrollment.progress.bookmarkedChapterIndexes || []);
+  if (bookmarked) {
+    currentBookmarks.add(numericChapterIndex);
+  } else {
+    currentBookmarks.delete(numericChapterIndex);
+  }
+
+  enrollment.progress.bookmarkedChapterIndexes = Array.from(currentBookmarks).sort(
+    (a, b) => a - b
+  );
+  enrollment.progress.lastWatchedAt = new Date();
+
+  await enrollment.save();
+
+  res.json({
+    message: "Bookmarks updated",
+    bookmarks: enrollment.progress.bookmarkedChapterIndexes
+  });
+});
+
+const issueCertificate = asyncHandler(async (req, res) => {
+  const recipientName = String(req.body.recipientName || "").trim();
+
+  if (!recipientName) {
+    res.status(400);
+    throw new Error("recipientName is required");
+  }
+
+  const enrollment = await Enrollment.findOne({
+    student: req.user._id,
+    course: req.params.courseId
+  })
+    .populate({ path: "course", populate: { path: "educator", select: "name" } })
+    .populate("educator", "name");
+
+  if (!enrollment) {
+    res.status(404);
+    throw new Error("Enrollment not found");
+  }
+
+  if (enrollment.status !== "completed") {
+    res.status(400);
+    throw new Error("Complete all chapters before generating a certificate");
+  }
+
+  enrollment.certificate = {
+    certificateId:
+      enrollment.certificate?.certificateId ||
+      createCertificateId(enrollment.course._id, req.user._id),
+    recipientName,
+    issuedAt: enrollment.certificate?.issuedAt || new Date()
+  };
+
+  await enrollment.save();
+
+  res.status(201).json({
+    message: "Certificate generated successfully",
+    certificate: enrollment.certificate,
+    course: {
+      id: enrollment.course._id,
+      title: enrollment.course.title,
+      category: enrollment.course.category
+    },
+    educator: {
+      name: enrollment.educator?.name || enrollment.course.educator?.name
+    },
+    completedAt: enrollment.completedAt
+  });
+});
+
+const getCertificate = asyncHandler(async (req, res) => {
+  const enrollment = await Enrollment.findOne({
+    student: req.user._id,
+    course: req.params.courseId
+  })
+    .populate({ path: "course", populate: { path: "educator", select: "name" } })
+    .populate("educator", "name");
+
+  if (!enrollment) {
+    res.status(404);
+    throw new Error("Enrollment not found");
+  }
+
+  if (!enrollment.certificate?.certificateId) {
+    res.status(404);
+    throw new Error("Certificate has not been generated yet");
+  }
+
+  res.json({
+    certificate: enrollment.certificate,
+    course: {
+      id: enrollment.course._id,
+      title: enrollment.course.title,
+      category: enrollment.course.category
+    },
+    educator: {
+      name: enrollment.educator?.name || enrollment.course.educator?.name
+    },
+    student: {
+      name: req.user.name
+    },
+    completedAt: enrollment.completedAt
   });
 });
 
@@ -357,5 +497,8 @@ module.exports = {
   getPaymentConfig,
   getMyEnrollments,
   getEnrollmentForCourse,
-  updateProgress
+  updateProgress,
+  updateBookmarks,
+  issueCertificate,
+  getCertificate
 };

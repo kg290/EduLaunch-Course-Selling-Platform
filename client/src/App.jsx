@@ -10,6 +10,9 @@ import CourseDetailsPage from "./pages/CourseDetailsPage";
 import EducatorDashboardPage from "./pages/EducatorDashboardPage";
 import MyLearningPage from "./pages/MyLearningPage";
 import AdminDashboardPage from "./pages/AdminDashboardPage";
+import WishlistPage from "./pages/WishlistPage";
+import StudentProfilePage from "./pages/StudentProfilePage";
+import CertificatePage from "./pages/CertificatePage";
 
 const App = () => {
   return (
@@ -29,6 +32,9 @@ const App = () => {
 
           <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
             <Route path="/my-learning" element={<MyLearningPage />} />
+            <Route path="/wishlist" element={<WishlistPage />} />
+            <Route path="/profile" element={<StudentProfilePage />} />
+            <Route path="/certificates/:courseId" element={<CertificatePage />} />
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
