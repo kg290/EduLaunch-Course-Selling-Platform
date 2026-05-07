@@ -1,12 +1,26 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
-export const API_ORIGIN = new URL(API_BASE_URL).origin;
+const DEFAULT_API_BASE_URL = import.meta.env.PROD ? "/api" : "http://localhost:5000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
+
+const resolveApiOrigin = () => {
+  if (/^https?:\/\//i.test(API_BASE_URL)) {
+    return new URL(API_BASE_URL).origin;
+  }
+
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+
+  return "http://localhost:5000";
+};
+
+export const API_ORIGIN = resolveApiOrigin();
 
 export const toAssetUrl = (value) => {
   const rawValue = String(value || "").trim();
   if (!rawValue) return "";
-  if (/^https?:\/\//i.test(rawValue)) {
+  if (/^(https?:\/\/|data:|blob:)/i.test(rawValue)) {
     return rawValue;
   }
   return `${API_ORIGIN}${rawValue.startsWith("/") ? rawValue : `/${rawValue}`}`;

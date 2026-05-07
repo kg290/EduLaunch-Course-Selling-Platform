@@ -5,6 +5,11 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Course = require("../models/Course");
 const Enrollment = require("../models/Enrollment");
+const {
+  localEducatorAccount,
+  localCourseDefinitions,
+  mapLocalCourseForStorage
+} = require("./localCourseCatalog");
 
 const demoEducator = {
   name: "Demo Educator",
@@ -27,7 +32,6 @@ const demoCourses = [
       "Build modern React apps with routing, auth, APIs, and deployment practices.",
     category: "Programming",
     price: 899,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "React Fundamentals",
@@ -52,7 +56,6 @@ const demoCourses = [
       "Create secure and scalable REST APIs using Node.js, Express, and MongoDB.",
     category: "Programming",
     price: 1099,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "API Project Architecture",
@@ -77,7 +80,6 @@ const demoCourses = [
       "Strengthen JS core concepts, async logic, and coding patterns for interviews.",
     category: "Programming",
     price: 799,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "Execution Context and Closures",
@@ -102,7 +104,6 @@ const demoCourses = [
       "Solve real interview questions using arrays, maps, recursion, and dynamic programming.",
     category: "Programming",
     price: 999,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "Big-O and Problem Solving Mindset",
@@ -127,7 +128,6 @@ const demoCourses = [
       "Learn visual hierarchy, typography, spacing, and user flow design from scratch.",
     category: "Design",
     price: 849,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "Design Principles that Matter",
@@ -152,7 +152,6 @@ const demoCourses = [
       "Convert design files into reusable components and production-ready frontend layouts.",
     category: "Design",
     price: 899,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "Organizing Figma Files for Developers",
@@ -172,62 +171,11 @@ const demoCourses = [
     ]
   },
   {
-    title: "Digital Marketing Bootcamp",
-    description:
-      "Get practical skills in content, SEO, email, and social growth strategy.",
-    category: "Marketing",
-    price: 949,
-    thumbnailUrl: "",
-    chapters: [
-      {
-        title: "Marketing Funnel Fundamentals",
-        youtubeUrl: "https://www.youtube.com/watch?v=7YxNfPVIMMs",
-        summary: "Acquire, activate, and retain users with clear funnel design."
-      },
-      {
-        title: "SEO and Content Strategy",
-        youtubeUrl: "https://www.youtube.com/watch?v=xsVTqzratPs",
-        summary: "Rank content and build long-term organic traffic."
-      },
-      {
-        title: "Email Campaign Playbook",
-        youtubeUrl: "https://www.youtube.com/watch?v=2vMK-p6-M5E",
-        summary: "Write emails that convert and retain customers."
-      }
-    ]
-  },
-  {
-    title: "Performance Marketing with Ads",
-    description:
-      "Run high-converting campaigns on Google and Meta with budget discipline.",
-    category: "Marketing",
-    price: 1199,
-    thumbnailUrl: "",
-    chapters: [
-      {
-        title: "Ad Account Setup and Tracking",
-        youtubeUrl: "https://www.youtube.com/watch?v=7n4u7M8N1kA",
-        summary: "Set campaign goals, pixels, and conversion events."
-      },
-      {
-        title: "Creative and Targeting Strategy",
-        youtubeUrl: "https://www.youtube.com/watch?v=KJgsSFOSQv0",
-        summary: "Build ad creative and audience segments that perform."
-      },
-      {
-        title: "Optimization and Scaling",
-        youtubeUrl: "https://www.youtube.com/watch?v=Wf2V8hTVQYw",
-        summary: "Improve ROAS using data-driven experimentation."
-      }
-    ]
-  },
-  {
     title: "Startup & Product Strategy",
     description:
       "Build products customers want using MVP strategy, user feedback, and growth loops.",
     category: "Business",
     price: 1099,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "Validating Product Ideas",
@@ -247,37 +195,11 @@ const demoCourses = [
     ]
   },
   {
-    title: "Freelance Client Acquisition",
-    description:
-      "Systematically get high-quality freelance clients and close projects consistently.",
-    category: "Business",
-    price: 749,
-    thumbnailUrl: "",
-    chapters: [
-      {
-        title: "Positioning and Niche Selection",
-        youtubeUrl: "https://www.youtube.com/watch?v=8aGhZQkoFbQ",
-        summary: "Choose a niche and define a compelling service offer."
-      },
-      {
-        title: "Outbound Outreach that Works",
-        youtubeUrl: "https://www.youtube.com/watch?v=YQHsXMglC9A",
-        summary: "Write outreach messages that get replies."
-      },
-      {
-        title: "Pricing and Sales Calls",
-        youtubeUrl: "https://www.youtube.com/watch?v=JGwWNGJdvx8",
-        summary: "Structure proposals and close profitable deals."
-      }
-    ]
-  },
-  {
     title: "Communication & Presentation Skills",
     description:
       "Speak clearly, structure ideas, and present confidently in interviews and meetings.",
     category: "General",
     price: 599,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "Structuring Your Message",
@@ -302,7 +224,6 @@ const demoCourses = [
       "Build deep-work routines, planning habits, and execution systems that scale output.",
     category: "General",
     price: 699,
-    thumbnailUrl: "",
     chapters: [
       {
         title: "Time Blocking and Focus Sessions",
@@ -345,23 +266,49 @@ const extractYoutubeVideoId = (url) => {
   return "";
 };
 
+const createInlineThumbnail = (title, category) => {
+  const safeTitle = String(title || "Course").slice(0, 48);
+  const safeCategory = String(category || "General").slice(0, 24).toUpperCase();
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+      <defs>
+        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0%" stop-color="#0f172a" />
+          <stop offset="100%" stop-color="#1d4ed8" />
+        </linearGradient>
+      </defs>
+      <rect width="1200" height="675" rx="24" fill="url(#bg)" />
+      <circle cx="1030" cy="120" r="120" fill="rgba(255,255,255,0.08)" />
+      <circle cx="120" cy="590" r="150" fill="rgba(255,255,255,0.06)" />
+      <text x="72" y="118" fill="#f8fafc" font-family="Arial, sans-serif" font-size="34" font-weight="700">${safeCategory}</text>
+      <text x="72" y="290" fill="#ffffff" font-family="Arial, sans-serif" font-size="66" font-weight="800">${safeTitle}</text>
+      <text x="72" y="380" fill="#cbd5e1" font-family="Arial, sans-serif" font-size="28">EduLaunch curated demo course</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+};
+
 const withThumbnail = (courseData) => {
-  if (String(courseData.thumbnailUrl || "").trim()) {
-    return courseData;
+  const explicitThumbnail = String(courseData.thumbnailUrl || "").trim();
+  if (explicitThumbnail) {
+    return {
+      ...courseData,
+      thumbnailUrl: explicitThumbnail
+    };
   }
 
   const firstVideoId = extractYoutubeVideoId(courseData.chapters?.[0]?.youtubeUrl);
-  if (!firstVideoId) {
+  if (firstVideoId) {
     return {
       ...courseData,
-      thumbnailUrl:
-        "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80"
+      thumbnailUrl: `https://img.youtube.com/vi/${firstVideoId}/hqdefault.jpg`
     };
   }
 
   return {
     ...courseData,
-    thumbnailUrl: `https://img.youtube.com/vi/${firstVideoId}/hqdefault.jpg`
+    thumbnailUrl: createInlineThumbnail(courseData.title, courseData.category)
   };
 };
 
@@ -371,15 +318,36 @@ const ensureUser = async (userData) => {
   return User.create(userData);
 };
 
-const upsertCourse = async (educatorId, courseData) => {
-  const query = { title: courseData.title, educator: educatorId };
-  const update = { ...withThumbnail(courseData), educator: educatorId };
-  return Course.findOneAndUpdate(query, update, {
-    new: true,
-    upsert: true,
-    runValidators: true,
-    setDefaultsOnInsert: true
-  });
+const syncCoursesForEducator = async (educatorId, coursePayloads) => {
+  const syncedCourses = [];
+
+  for (const coursePayload of coursePayloads) {
+    const course = await Course.findOneAndUpdate(
+      { title: coursePayload.title, educator: educatorId },
+      coursePayload,
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true
+      }
+    );
+    syncedCourses.push(course);
+  }
+
+  const syncedIds = syncedCourses.map((course) => course._id);
+  const staleCourses = await Course.find({
+    educator: educatorId,
+    _id: { $nin: syncedIds }
+  }).select("_id");
+
+  if (staleCourses.length) {
+    const staleIds = staleCourses.map((course) => course._id);
+    await Enrollment.deleteMany({ course: { $in: staleIds } });
+    await Course.deleteMany({ _id: { $in: staleIds } });
+  }
+
+  return syncedCourses;
 };
 
 const seedDemoData = async () => {
@@ -390,30 +358,39 @@ const seedDemoData = async () => {
 
   const educator = await ensureUser(demoEducator);
   const student = await ensureUser(demoStudent);
+  const localEducator = await ensureUser(localEducatorAccount);
 
-  const createdCourses = [];
-  for (const courseData of demoCourses) {
-    const course = await upsertCourse(educator._id, courseData);
-    createdCourses.push(course);
-  }
+  const mappedDemoCourses = demoCourses.map((courseData) => ({
+    ...withThumbnail(courseData),
+    educator: educator._id
+  }));
+  const createdDemoCourses = await syncCoursesForEducator(educator._id, mappedDemoCourses);
 
-  if (createdCourses[0]) {
+  const mappedLocalCourses = localCourseDefinitions.map((courseDefinition) =>
+    mapLocalCourseForStorage(courseDefinition, localEducator._id)
+  );
+  const createdLocalCourses = await syncCoursesForEducator(
+    localEducator._id,
+    mappedLocalCourses
+  );
+
+  if (createdDemoCourses[0]) {
     await Enrollment.findOneAndUpdate(
-      { student: student._id, course: createdCourses[0]._id },
+      { student: student._id, course: createdDemoCourses[0]._id },
       {
         student: student._id,
         educator: educator._id,
-        course: createdCourses[0]._id,
+        course: createdDemoCourses[0]._id,
         payment: {
           provider: "razorpay",
-          transactionId: `demo_seed_${createdCourses[0]._id}`,
+          transactionId: `demo_seed_${createdDemoCourses[0]._id}`,
           status: "captured",
-          amount: createdCourses[0].price,
+          amount: createdDemoCourses[0].price,
           currency: "INR"
         },
         progress: {
           completedChapterIndexes: [0],
-          completedPercent: Math.round((1 / createdCourses[0].chapters.length) * 100),
+          completedPercent: Math.round((1 / createdDemoCourses[0].chapters.length) * 100),
           lastWatchedAt: new Date()
         },
         status: "active"
@@ -424,7 +401,9 @@ const seedDemoData = async () => {
 
   console.log(`Demo educator: ${demoEducator.email} / ${demoEducator.password}`);
   console.log(`Demo student: ${demoStudent.email} / ${demoStudent.password}`);
-  console.log(`Seeded courses: ${createdCourses.length}`);
+  console.log(`Local educator: ${localEducatorAccount.email} / ${localEducatorAccount.password}`);
+  console.log(`Seeded YouTube courses: ${createdDemoCourses.length}`);
+  console.log(`Seeded local courses: ${createdLocalCourses.length}`);
 
   await mongoose.disconnect();
   console.log("Demo data seeding complete.");

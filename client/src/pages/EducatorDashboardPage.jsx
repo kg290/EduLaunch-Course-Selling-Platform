@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { upload } from "@vercel/blob/client";
 
 import api from "../api/client";
 import ChapterFormList from "../components/ChapterFormList";
@@ -11,6 +12,9 @@ const emptyForm = {
   thumbnailUrl: "",
   chapters: [{ title: "", youtubeUrl: "", videoPath: "", originalVideoName: "", summary: "" }]
 };
+
+const blobUploadUrl =
+  import.meta.env.VITE_BLOB_UPLOAD_URL || (import.meta.env.PROD ? "/api/blob-upload" : "");
 
 const EducatorDashboardPage = () => {
   const [form, setForm] = useState(emptyForm);
@@ -103,14 +107,34 @@ const EducatorDashboardPage = () => {
     setError("");
     setUploadingChapterIndex(index);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      let asset;
 
-      const response = await api.post("/courses/upload-video", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data"
-        }
-      });
+      if (blobUploadUrl) {
+        const uploadedBlob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: blobUploadUrl,
+          multipart: true,
+          clientPayload: JSON.stringify({
+            token: localStorage.getItem("token") || ""
+          })
+        });
+
+        asset = {
+          videoPath: uploadedBlob.url,
+          originalVideoName: file.name
+        };
+      } else {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await api.post("/courses/upload-video", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data"
+          }
+        });
+
+        asset = response.data.asset;
+      }
 
       setForm((prev) => ({
         ...prev,
@@ -118,8 +142,8 @@ const EducatorDashboardPage = () => {
           chapterIndex === index
             ? {
                 ...chapter,
-                videoPath: response.data.asset.videoPath,
-                originalVideoName: response.data.asset.originalVideoName
+                videoPath: asset.videoPath,
+                originalVideoName: asset.originalVideoName
               }
             : chapter
         )

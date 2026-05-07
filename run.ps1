@@ -137,6 +137,9 @@ if (-not $SkipInstall) {
 if (-not $SkipSeed) {
   Write-Step "Seeding admin data"
   npm run seed:admin --prefix server
+
+  Write-Step "Seeding demo catalog (YouTube + local library)"
+  npm run seed:demo --prefix server
 }
 
 if (-not $NoStart) {

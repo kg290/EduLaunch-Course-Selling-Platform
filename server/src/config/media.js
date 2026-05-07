@@ -1,10 +1,14 @@
 const fs = require("fs");
 const path = require("path");
 
-const uploadsRoot = path.resolve(__dirname, "../../uploads");
+const isVercel = process.env.VERCEL === "1";
+const uploadsRoot = isVercel
+  ? path.join("/tmp", "edulaunch-uploads")
+  : path.resolve(__dirname, "../../uploads");
 const courseVideoUploadDir = path.join(uploadsRoot, "videos");
 const localCourseLibraryRoot =
-  process.env.LOCAL_COURSE_LIBRARY || "C:\\Users\\karna\\Downloads\\courses";
+  process.env.LOCAL_COURSE_LIBRARY ||
+  (isVercel ? "" : "C:\\Users\\karna\\Downloads\\courses");
 
 const ensureMediaDirectories = () => {
   [uploadsRoot, courseVideoUploadDir].forEach((dirPath) => {
@@ -26,6 +30,7 @@ const buildUploadVideoPath = (fileName) => `/media/uploads/videos/${toUrlPath(fi
 const buildLibraryVideoPath = (relativePath) => `/media/library/${toUrlPath(relativePath)}`;
 
 module.exports = {
+  isVercel,
   uploadsRoot,
   courseVideoUploadDir,
   localCourseLibraryRoot,

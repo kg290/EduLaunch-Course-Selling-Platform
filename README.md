@@ -77,6 +77,10 @@ Minimum required for full app:
 | `SMTP_PASS` | SMTP password | No |
 | `ADMIN_EMAIL` | Admin seed email | No (default exists) |
 | `ADMIN_PASSWORD` | Admin seed password | No (default exists) |
+| `LOCAL_COURSE_LIBRARY` | Local-only absolute path for imported course videos | No |
+| `BLOB_READ_WRITE_TOKEN` | Required on Vercel for production video uploads | No locally, Yes for deployed uploads |
+| `VITE_API_BASE_URL` | Frontend API base URL | No locally, recommended for custom deploys |
+| `VITE_BLOB_UPLOAD_URL` | Blob token endpoint used by frontend uploads | No locally, recommended on Vercel |
 
 Example `server/.env`:
 
@@ -96,6 +100,8 @@ SMTP_PASS=
 
 ADMIN_EMAIL=admin@edulaunch.com
 ADMIN_PASSWORD=admin123
+
+LOCAL_COURSE_LIBRARY=C:\Users\your-name\Downloads\courses
 ```
 
 ---
@@ -236,6 +242,7 @@ If keys are missing, app falls back to mock payment.
 - `npm run dev:server` - server dev only
 - `npm run dev:client` - client dev only
 - `npm run install:all` - install server and client deps
+- `npm run build` - build frontend production bundle
 
 ### Server (`server/package.json`)
 
@@ -301,6 +308,12 @@ That incorrectly looks for `server/server/package.json`.
 
 - `Missing script: seed:demo`
   - Pull latest code or ensure `server/package.json` contains `seed:demo`.
+- Local uploaded videos do not play after deploying to Vercel
+  - This is expected if the course was seeded from a local machine path.
+  - The app now falls back to the saved YouTube URL automatically when local media is unavailable.
+- Educator video uploads fail on Vercel
+  - Add a Blob store to the Vercel project and ensure `BLOB_READ_WRITE_TOKEN` is present.
+  - Set `VITE_BLOB_UPLOAD_URL=/api/blob-upload`.
 - Thumbnails look broken
   - Existing courses may have invalid external URLs.
   - Reseed demo data (`seed:demo`) or update thumbnail URLs via educator dashboard.
@@ -313,6 +326,53 @@ That incorrectly looks for `server/server/package.json`.
 
 ---
 
-## 15. License
+## 15. Vercel Deployment
+
+This repo is now prepared to deploy as:
+- Vite frontend output from `client/dist`
+- Vercel serverless API routes from root `/api`
+- SPA-safe client routing via `vercel.json`
+
+### Recommended Vercel Environment Variables
+
+Set these in the Vercel dashboard:
+
+```env
+MONGO_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret
+CLIENT_URL=https://your-vercel-domain.vercel.app
+
+RAZORPAY_KEY_ID=rzp_test_xxxxx
+RAZORPAY_KEY_SECRET=xxxxxxxx
+
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+
+ADMIN_EMAIL=admin@edulaunch.com
+ADMIN_PASSWORD=admin123
+
+BLOB_READ_WRITE_TOKEN=your_vercel_blob_token
+VITE_API_BASE_URL=/api
+VITE_BLOB_UPLOAD_URL=/api/blob-upload
+```
+
+### Important Production Notes
+
+- Use MongoDB Atlas or another network-accessible MongoDB instance. Local MongoDB will not work on Vercel.
+- For large educator video uploads on Vercel, Blob is required. Vercel Functions have a request body limit, so the app now uses browser-to-Blob uploads in production.
+- Locally seeded course videos from `C:\Users\...` will not exist in Vercel. Those lessons now fall back to their YouTube URL automatically instead of breaking.
+
+### Deploy Settings
+
+- Framework preset: `Other`
+- Root directory: project root
+- Build command: read from `vercel.json`
+- Output directory: read from `vercel.json`
+
+---
+
+## 16. License
 
 Use freely for learning/hackathon purposes unless your team adds a separate license file.

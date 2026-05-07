@@ -121,7 +121,8 @@ const confirmMockPaymentAndEnroll = asyncHandler(async (req, res) => {
 
   const populatedEnrollment = await Enrollment.findById(enrollment._id)
     .populate("course")
-    .populate("educator", "name");
+    .populate("educator", "name")
+    .lean();
 
   // Send enrollment email (non-blocking)
   const student = await User.findById(req.user._id);
@@ -256,7 +257,8 @@ const verifyRazorpayPayment = asyncHandler(async (req, res) => {
 
   const populatedEnrollment = await Enrollment.findById(enrollment._id)
     .populate("course")
-    .populate("educator", "name");
+    .populate("educator", "name")
+    .lean();
 
   // Send enrollment email (non-blocking)
   const student = await User.findById(req.user._id);
@@ -350,11 +352,15 @@ const updateProgress = asyncHandler(async (req, res) => {
   enrollment.completedAt = completedPercent === 100 ? enrollment.completedAt || new Date() : null;
 
   await enrollment.save();
+  await enrollment.populate({ path: "course", populate: { path: "educator", select: "name" } });
+  await enrollment.populate("educator", "name");
+  const responseEnrollment = enrollment.toObject();
 
   res.json({
     message: "Progress updated",
     progress: enrollment.progress,
-    status: enrollment.status
+    status: enrollment.status,
+    enrollment: responseEnrollment
   });
 });
 
@@ -417,7 +423,8 @@ const issueCertificate = asyncHandler(async (req, res) => {
     course: req.params.courseId
   })
     .populate({ path: "course", populate: { path: "educator", select: "name" } })
-    .populate("educator", "name");
+    .populate("educator", "name")
+    .lean();
 
   if (!enrollment) {
     res.status(404);

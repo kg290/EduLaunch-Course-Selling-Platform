@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import api, { toAssetUrl } from "../api/client";
@@ -37,6 +37,8 @@ const CourseDetailsPage = () => {
   const [paying, setPaying] = useState(false);
   const [wishlistBusy, setWishlistBusy] = useState(false);
   const [bookmarkBusy, setBookmarkBusy] = useState(false);
+  const [localVideoFailed, setLocalVideoFailed] = useState(false);
+  const autoCompletingChapterRef = useRef(null);
 
   const isStudent = user?.role === "student";
   const isAdmin = user?.role === "admin";
@@ -145,6 +147,10 @@ const CourseDetailsPage = () => {
     return chaptersForView[selectedChapter] || chaptersForView[0];
   }, [chaptersForView, selectedChapter]);
 
+  useEffect(() => {
+    setLocalVideoFailed(false);
+  }, [selectedChapter, selectedChapterData?.videoPath]);
+
   const isSelectedChapterLocked = Boolean(
     selectedChapterData?.isLocked && !canAccessCourseContent
   );
@@ -153,6 +159,11 @@ const CourseDetailsPage = () => {
   const bookmarkedIndexes = enrollment?.progress?.bookmarkedChapterIndexes || [];
   const isBookmarked = bookmarkedIndexes.includes(selectedChapter);
   const hasCertificate = Boolean(enrollment?.certificate?.certificateId);
+  const isCourseCompleted = Boolean(
+    enrollment &&
+      (enrollment.status === "completed" ||
+        (chapterCount > 0 && completedIndexes.length === chapterCount))
+  );
 
   // Razorpay real payment flow
   const startRazorpayPayment = async () => {
@@ -234,11 +245,17 @@ const CourseDetailsPage = () => {
         chapterIndex,
         completed: checked
       });
-      setEnrollment((prev) => ({
-        ...prev,
-        progress: response.data.progress,
-        status: response.data.status
-      }));
+      if (response.data.enrollment) {
+        setEnrollment(response.data.enrollment);
+      } else {
+        setEnrollment((prev) => ({
+          ...prev,
+          progress: response.data.progress,
+          status: response.data.status
+        }));
+      }
+
+      await loadEnrollment();
 
       if (options.advanceToNext && checked) {
         if (chapterIndex < chaptersForView.length - 1) {
@@ -296,11 +313,38 @@ const CourseDetailsPage = () => {
     }
   };
 
-  const onLocalVideoEnded = async () => {
+  const autoCompleteSelectedChapter = async () => {
     if (!enrollment || completedIndexes.includes(selectedChapter)) {
       return;
     }
-    await toggleChapterCompletion(selectedChapter, true, { advanceToNext: true });
+
+    const chapterKey = `${id}:${selectedChapter}`;
+    if (autoCompletingChapterRef.current === chapterKey) {
+      return;
+    }
+
+    autoCompletingChapterRef.current = chapterKey;
+    try {
+      await toggleChapterCompletion(selectedChapter, true, { advanceToNext: true });
+    } finally {
+      autoCompletingChapterRef.current = null;
+    }
+  };
+
+  const onLocalVideoEnded = async () => {
+    await autoCompleteSelectedChapter();
+  };
+
+  const onLocalVideoTimeUpdate = async (event) => {
+    const { currentTime, duration } = event.currentTarget;
+
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return;
+    }
+
+    if (currentTime / duration >= 0.98) {
+      await autoCompleteSelectedChapter();
+    }
   };
 
   if (status === "loading") {
@@ -440,7 +484,7 @@ const CourseDetailsPage = () => {
               style={{ width: `${enrollment.progress?.completedPercent || 0}%` }}
             />
           </div>
-          {enrollment.status === "completed" && (
+          {isCourseCompleted && (
             <div style={{ marginTop: "0.8rem" }}>
               <p className="success">🎉 Congratulations! You've completed this course.</p>
               <Link className="btn btn-primary" to={`/certificates/${id}`} style={{ marginTop: "0.7rem" }}>
@@ -539,13 +583,15 @@ const CourseDetailsPage = () => {
               <p className="muted" style={{ marginBottom: "0.5rem" }}>
                 {selectedChapterData.summary || "No summary provided."}
               </p>
-              {selectedChapterData.videoPath ? (
+              {selectedChapterData.videoPath && !localVideoFailed ? (
                 <div className="video-wrap">
                   <video
                     key={`${selectedChapter}-${selectedChapterData.videoPath}`}
                     controls
                     preload="metadata"
+                    onError={() => setLocalVideoFailed(true)}
                     onEnded={onLocalVideoEnded}
+                    onTimeUpdate={onLocalVideoTimeUpdate}
                   >
                     <source src={toAssetUrl(selectedChapterData.videoPath)} />
                     Your browser does not support the video tag.
@@ -568,7 +614,9 @@ const CourseDetailsPage = () => {
 
               {selectedChapterData.videoPath && enrollment && (
                 <p className="muted" style={{ marginTop: "0.7rem", fontSize: "0.85rem" }}>
-                  This local uploaded lesson auto-marks as complete and advances to the next chapter when the video ends.
+                  {localVideoFailed
+                    ? "Local video is unavailable in this environment, so the lesson has fallen back to YouTube."
+                    : "This local uploaded lesson auto-marks as complete and advances to the next chapter when the video ends."}
                 </p>
               )}
 

@@ -53,7 +53,7 @@ const ChapterFormList = ({
             <p className="muted" style={{ fontSize: "0.82rem" }}>
               {chapter.videoPath
                 ? `Local video ready: ${chapter.originalVideoName || "Uploaded file"}`
-                : "Upload a local video first. YouTube acts as fallback if local media is unavailable."}
+                : "Upload a local video first. In production, direct browser uploads are used when Blob is configured. YouTube acts as fallback if local media is unavailable."}
             </p>
             {uploadingChapterIndex === index && (
               <span className="label">Uploading...</span>
